@@ -75,6 +75,28 @@ func OpenBucket(ctx context.Context, k8sClient kubernetes.Interface, namespace s
 		return blob.PrefixedBucket(minioBucket, config.Prefix), nil
 
 	}
+	if config.Scheme == "s3://" {
+		sess, err := session.NewSession(&aws.Config{
+			Credentials: credentials.NewStaticCredentials(
+				os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), "",
+			),
+			Region:           aws.String(os.Getenv("AWS_REGION")),
+			Endpoint:         aws.String(os.Getenv("ENDPOINT")),
+			DisableSSL:       aws.Bool(true),
+			S3ForcePathStyle: aws.Bool(true),
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create session to access aws s3 object: %v", err)
+		}
+		s3Bucket, err := s3blob.OpenBucket(ctx, sess, config.BucketName, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Directly calling s3blob.OpenBucket does not allow overriding prefix via bucketConfig.BucketURL().
+		// Therefore, we need to explicitly configure the prefixed bucket.
+		return blob.PrefixedBucket(s3Bucket, config.Prefix), nil
+	}
 	return blob.OpenBucket(ctx, config.bucketURL())
 }
 

@@ -94,8 +94,12 @@ def output_name_to_argo(name: str) -> str:
     # See https://github.com/kubeflow/pipelines/blob/39975e3cde7ba4dcea2bca835b92d0fe40b1ae3c/sdk/python/kfp/compiler/_k8s_helper.py#L33
     return re.sub('-+', '-', re.sub('[^-_0-9A-Za-z]+', '-', name)).strip('-')
 
+def is_ip_endpoint(endpoint: str) -> bool:
+    ipv4_pattern = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+    return re.match(ipv4_pattern, endpoint) is not None
+
 def is_s3_endpoint(endpoint: str) -> bool:
-    return re.search('^.*s3.*amazonaws.com.*$', endpoint)
+    return re.search('^.*s3.*amazonaws.com.*$', endpoint) or is_ip_endpoint(endpoint)
 
 def get_object_store_provider(endpoint: str) -> bool:
     if is_s3_endpoint(endpoint):
@@ -108,8 +112,8 @@ def argo_artifact_to_uri(artifact: dict) -> str:
     if 's3' in artifact:
         s3_artifact = artifact['s3']
         return '{provider}://{bucket}/{key}'.format(
-            provider=get_object_store_provider(s3_artifact.get('endpoint', '')),
-            bucket=s3_artifact.get('bucket', ''),
+            provider=get_object_store_provider(s3_artifact.get('endpoint', os.environ.get('OBJECT_STORE_ENDPOINT', ''))),
+            bucket=s3_artifact.get('bucket', os.environ.get('OBJECT_STORE_BUCKET', '')),
             key=s3_artifact.get('key', ''),
         )
     elif 'raw' in artifact:
