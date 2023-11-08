@@ -94,12 +94,11 @@ def output_name_to_argo(name: str) -> str:
     # See https://github.com/kubeflow/pipelines/blob/39975e3cde7ba4dcea2bca835b92d0fe40b1ae3c/sdk/python/kfp/compiler/_k8s_helper.py#L33
     return re.sub('-+', '-', re.sub('[^-_0-9A-Za-z]+', '-', name)).strip('-')
 
-def is_ip_endpoint(endpoint: str) -> bool:
-    ipv4_pattern = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-    return re.match(ipv4_pattern, endpoint) is not None
+def is_object_store_s3_compatible() -> bool:
+    return os.environ.get('S3_COMPATIBLE_OBJECT_STORE', "false") == "true"
 
 def is_s3_endpoint(endpoint: str) -> bool:
-    return re.search('^.*s3.*amazonaws.com.*$', endpoint) or is_ip_endpoint(endpoint)
+    return re.search('^.*s3.*amazonaws.com.*$', endpoint) or is_object_store_s3_compatible()
 
 def get_object_store_provider(endpoint: str) -> bool:
     if is_s3_endpoint(endpoint):
