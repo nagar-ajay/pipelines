@@ -75,6 +75,30 @@ func OpenBucket(ctx context.Context, k8sClient kubernetes.Interface, namespace s
 		return blob.PrefixedBucket(minioBucket, config.Prefix), nil
 
 	}
+	if config.Scheme == "s3://" {
+		cred, region, endpoint, err := getObjectStoreDetails(ctx, k8sClient, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get object store details: %w", err)
+		}
+		sess, err := session.NewSession(&aws.Config{
+			Credentials:      cred,
+			Region:           aws.String(region),
+			Endpoint:         aws.String(endpoint),
+			DisableSSL:       aws.Bool(true),
+			S3ForcePathStyle: aws.Bool(true),
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create session to access aws s3 object: %v", err)
+		}
+		s3Bucket, err := s3blob.OpenBucket(ctx, sess, config.BucketName, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Directly calling s3blob.OpenBucket does not allow overriding prefix via bucketConfig.BucketURL().
+		// Therefore, we need to explicitly configure the prefixed bucket.
+		return blob.PrefixedBucket(s3Bucket, config.Prefix), nil
+	}
 	return blob.OpenBucket(ctx, config.bucketURL())
 }
 
@@ -339,4 +363,36 @@ func getMinioCredential(ctx context.Context, clientSet kubernetes.Interface, nam
 
 func getAWSCredential() (cred *credentials.Credentials, err error) {
 	return credentials.NewCredentials(&credentials.ChainProvider{}), nil
+}
+
+func getObjectStoreDetails(ctx context.Context, clientSet kubernetes.Interface, namespace string) (cred *credentials.Credentials, region string, endpoint string, err error) {
+	defer func() {
+		if err != nil {
+			// wrap error before returning
+			err = fmt.Errorf("Failed to get object store details from secret name=%q namespace=%q: %w", minioArtifactSecretName, namespace, err)
+		}
+	}()
+	secret, err := clientSet.CoreV1().Secrets(namespace).Get(
+		ctx,
+		minioArtifactSecretName,
+		metav1.GetOptions{})
+	if err != nil {
+		return nil, "", "", err
+	}
+	accessKey := string(secret.Data["accesskey"])
+	secretKey := string(secret.Data["secretkey"])
+	region = string(secret.Data["region"])
+	endpoint = string(secret.Data["endpoint"])
+
+	if accessKey != "" && secretKey != "" && region != "" && endpoint != "" {
+		cred = credentials.NewStaticCredentials(accessKey, secretKey, "")
+		return cred, region, endpoint, err
+	}
+
+	aws_cred, err := getAWSCredential()
+	if aws_cred != nil && endpoint != "" && region != "" {
+		return aws_cred, region, endpoint, err
+	}
+
+	return nil, "", "", fmt.Errorf("does not have 'accesskey' or 'secretkey' key")
 }

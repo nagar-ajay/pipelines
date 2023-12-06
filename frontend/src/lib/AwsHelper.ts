@@ -20,5 +20,16 @@
  * @param endpoint minio endpoint to check.
  */
 export function isS3Endpoint(endpoint: string = ''): boolean {
-  return !!endpoint.match(/s3.{0,}\.amazonaws\.com\.?.{0,}/i);
+  return !!endpoint.match(/s3.{0,}\.amazonaws\.com\.?.{0,}/i) || isIPEndpoint(endpoint);
+}
+
+/**
+ * Check if the provided string is an IP
+ *
+ * @param endpoint endpoint to check.
+ * required only for v1 pipelines
+ */
+function isIPEndpoint(endpoint: string = ''): boolean {
+  const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipv4Pattern.test(endpoint)
 }
